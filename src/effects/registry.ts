@@ -1,128 +1,11 @@
-// Effect library. Every shader effect is an SkSL runtime image filter that
-// receives the layer's pixels as `image`, in project pixel coordinates.
-// Parameter uniforms are named `p_<key>`; colors are float4 (straight alpha).
+// Effect library. See defs.ts for how shader effects are wired up.
+import { center, choice, color, colorFx, num, type EffectDef } from './defs';
+import { MORE_EFFECTS } from './more';
+import { MOTION_EFFECTS } from './motion';
 
-export type EffectCategory =
-  | 'Blur'
-  | 'Color'
-  | 'Distort'
-  | 'Stylize'
-  | 'Light'
-  | 'Glitch & Retro'
-  | 'Reveal';
+export * from './defs';
 
-export const CATEGORIES: EffectCategory[] = [
-  'Blur',
-  'Color',
-  'Distort',
-  'Stylize',
-  'Light',
-  'Glitch & Retro',
-  'Reveal',
-];
-
-export interface NumberParam {
-  key: string;
-  label: string;
-  kind: 'number';
-  min: number;
-  max: number;
-  default: number;
-  step?: number;
-  options?: string[]; // when set, the value is an index into this list
-}
-
-export interface ColorParam {
-  key: string;
-  label: string;
-  kind: 'color';
-  default: string;
-}
-
-export type ParamDef = NumberParam | ColorParam;
-
-export interface EffectDef {
-  type: string;
-  name: string;
-  category: EffectCategory;
-  params: ParamDef[];
-  // 'shader' effects use `sksl`; the others map to built-in Skia image filters.
-  impl: 'shader' | 'gaussianBlur' | 'dropShadow';
-  sksl?: string;
-}
-
-const num = (
-  key: string,
-  label: string,
-  min: number,
-  max: number,
-  def: number,
-  step?: number,
-): NumberParam => ({ key, label, kind: 'number', min, max, default: def, step });
-const choice = (key: string, label: string, options: string[], def = 0): NumberParam => ({
-  key,
-  label,
-  kind: 'number',
-  min: 0,
-  max: options.length - 1,
-  default: def,
-  step: 1,
-  options,
-});
-const color = (key: string, label: string, def: string): ColorParam => ({ key, label, kind: 'color', default: def });
-const center = [num('cx', 'Center X %', -50, 150, 50), num('cy', 'Center Y %', -50, 150, 50)];
-
-const PRELUDE = `
-const float PI = 3.14159265;
-float hash(float2 p) { return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
-float hash1(float n) { return fract(sin(n * 91.3458) * 47453.5453); }
-float noise1(float t) { float i = floor(t); float f = fract(t); return mix(hash1(i), hash1(i + 1.0), f * f * (3.0 - 2.0 * f)); }
-float vnoise(float2 p) {
-  float2 i = floor(p); float2 f = fract(p); float2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + float2(1, 0)), u.x), mix(hash(i + float2(0, 1)), hash(i + float2(1, 1)), u.x), u.y);
-}
-float luma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
-float3 unp(float4 c) { return c.a > 0.0001 ? c.rgb / c.a : float3(0); }
-half4 pm(float3 rgb, float a) { return half4(half3(clamp(rgb, 0.0, 1.0) * a), half(a)); }
-float2 rot(float2 v, float a) { float s = sin(a); float c = cos(a); return float2(c * v.x - s * v.y, s * v.x + c * v.y); }
-float3 rgb2hsv(float3 c) {
-  float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  float4 p = mix(float4(c.bg, K.wz), float4(c.gb, K.xy), step(c.b, c.g));
-  float4 q = mix(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
-  float d = q.x - min(q.w, q.y);
-  return float3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
-}
-float3 hsv2rgb(float3 c) {
-  float3 p = abs(fract(c.xxx + float3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
-  return c.z * mix(float3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
-}
-float2 ctr() { return float2(p_cx, p_cy) * res / 100.0; }
-`;
-
-// Effects without a center param still get dummy cx/cy uniforms so the prelude compiles.
-export const buildSksl = (def: EffectDef): string => {
-  const keys = new Set(def.params.map((p) => p.key));
-  const decls = [
-    'uniform shader image;',
-    'uniform float2 res;',
-    'uniform float time;',
-    ...def.params.map((p) => `uniform ${p.kind === 'color' ? 'float4' : 'float'} p_${p.key};`),
-    ...(keys.has('cx') ? [] : ['uniform float p_cx;']),
-    ...(keys.has('cy') ? [] : ['uniform float p_cy;']),
-  ];
-  return `${decls.join('\n')}\n${PRELUDE}\n${def.sksl}`;
-};
-
-const colorFx = (body: string) => `
-half4 main(float2 xy) {
-  float4 c = float4(image.eval(xy));
-  float3 rgb = unp(c);
-  float3 o = rgb;
-  ${body}
-  return pm(o, c.a);
-}`;
-
-export const EFFECTS: EffectDef[] = [
+const CORE_EFFECTS: EffectDef[] = [
   // ---------------------------------------------------------------- Blur
   {
     type: 'gaussianBlur',
@@ -1055,5 +938,7 @@ half4 main(float2 xy) {
 }`,
   },
 ];
+
+export const EFFECTS: EffectDef[] = [...MOTION_EFFECTS, ...CORE_EFFECTS, ...MORE_EFFECTS];
 
 export const EFFECT_MAP: Record<string, EffectDef> = Object.fromEntries(EFFECTS.map((e) => [e.type, e]));

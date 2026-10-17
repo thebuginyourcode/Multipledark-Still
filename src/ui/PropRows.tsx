@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { Easing, Layer, Prop } from '../model/types';
+import type { Easing, Layer, Oscillator, Prop } from '../model/types';
+import { WAVES, WAVE_LABELS } from '../model/wave';
 import { EASING_LABELS, isAnimated, keyframeAt, valueAt } from '../model/animate';
 import { getIn, type Editor, type Path } from '../editor/useEditor';
 import { Chip, Slider } from './controls';
@@ -58,6 +59,42 @@ function EasingPicker({ editor, layer, path, prop }: { editor: Editor; layer: La
   );
 }
 
+function OscEditor({
+  editor,
+  layer,
+  path,
+  prop,
+  range,
+}: {
+  editor: Editor;
+  layer: Layer;
+  path: Path;
+  prop: Prop<number>;
+  range: number;
+}) {
+  const osc: Oscillator = prop.osc ?? { enabled: true, wave: 'sine', amp: Math.round(range / 8) || 1, freq: 1, phase: 0 };
+  const set = (patch: Partial<Oscillator>) => editor.setField(layer.id, [...path, 'osc'], { ...osc, ...patch });
+  return (
+    <View style={st.osc}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={[st.label, { flex: 1 }]}>∿ Oscillate</Text>
+        <Chip label={osc.enabled && prop.osc ? 'On' : 'Off'} active={!!prop.osc && osc.enabled} onPress={() => set({ enabled: !(prop.osc && osc.enabled) })} />
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {WAVES.map((w) => (
+          <Chip key={w} label={WAVE_LABELS[w]} active={osc.wave === w} onPress={() => set({ wave: w })} />
+        ))}
+      </ScrollView>
+      <Text style={st.oscLabel}>Amplitude</Text>
+      <Slider value={osc.amp} min={0} max={Math.max(1, range)} step={range > 20 ? 1 : 0.1} onChange={(amp) => set({ amp })} />
+      <Text style={st.oscLabel}>Frequency (cycles / sec)</Text>
+      <Slider value={osc.freq} min={0} max={20} step={0.05} onChange={(freq) => set({ freq })} />
+      <Text style={st.oscLabel}>Phase °</Text>
+      <Slider value={osc.phase} min={0} max={360} onChange={(phase) => set({ phase })} />
+    </View>
+  );
+}
+
 export function NumberRow({
   editor,
   layer,
@@ -79,7 +116,9 @@ export function NumberRow({
 }) {
   const prop = getIn(layer, path) as Prop<number>;
   const [showEase, setShowEase] = useState(false);
+  const [showOsc, setShowOsc] = useState(false);
   if (!prop) return null;
+  const oscOn = !!prop.osc?.enabled;
   const v = Number(valueAt(prop, editor.time));
   return (
     <View style={st.row}>
@@ -96,6 +135,11 @@ export function NumberRow({
           <Text style={st.label}>{label}</Text>
         </Pressable>
         <KeyNav prop={prop} editor={editor} />
+        {!options && (
+          <Pressable hitSlop={8} onPress={() => setShowOsc((x) => !x)}>
+            <Text style={[st.oscBtn, oscOn && { color: C.accent2 }]}>∿</Text>
+          </Pressable>
+        )}
       </View>
       {options ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -107,6 +151,7 @@ export function NumberRow({
         <Slider value={v} min={min} max={max} step={step} onChange={(nv) => editor.setProp(layer.id, path, nv)} />
       )}
       {showEase && <EasingPicker editor={editor} layer={layer} path={path} prop={prop} />}
+      {showOsc && <OscEditor editor={editor} layer={layer} path={path} prop={prop} range={(max - min) / 2} />}
     </View>
   );
 }
@@ -224,6 +269,9 @@ const st = StyleSheet.create({
     borderColor: C.faint,
     transform: [{ rotate: '45deg' }],
   },
+  oscBtn: { color: C.faint, fontSize: 20, paddingHorizontal: 8, lineHeight: 22 },
+  osc: { backgroundColor: C.panel2, borderRadius: 10, padding: 8, marginTop: 4 },
+  oscLabel: { color: C.dim, fontSize: 12, marginTop: 4 },
   nav: { color: C.key, fontSize: 22, paddingHorizontal: 8, lineHeight: 22 },
   swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 },
   swatch: { width: 30, height: 30, borderRadius: 15, margin: 4, borderWidth: 1, borderColor: C.line },

@@ -4,8 +4,8 @@ import { Canvas, Group, Path, Skia } from '@shopify/react-native-skia';
 import { Scene } from '../render/Scene';
 import { buildStrokePath } from '../render/shapes';
 import { setAt, valueAt } from '../model/animate';
-import { contentSize, hitTest, isActive, localToProject, placement, projectToLocal } from '../model/geometry';
-import type { DrawingLayer, Layer } from '../model/types';
+import { hitTest, isActive, layerCorners, layerMatrix3, localToProject, placement, projectToLocal, viewAt } from '../model/geometry';
+import type { DrawingLayer, Layer, Project } from '../model/types';
 import type { Editor } from './useEditor';
 import { C } from '../ui/theme';
 
@@ -50,14 +50,14 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
           const pt = toProject(locationX, locationY);
           const sel = ed.selected;
           if (dm && sel?.kind === 'drawing') {
-            const local = projectToLocal(placement(sel, ed.time), pt.x, pt.y);
+            const local = projectToLocal(matrixOf(ed.project, sel, ed.time), pt.x, pt.y);
             stroke.current = [local.x, local.y];
             g.current = { mode: 'draw', id: sel.id };
             setLiveStroke([...stroke.current]);
             return;
           }
-          const hit = hitTest(ed.project.layers, ed.time, pt.x, pt.y);
-          const target = sel && hitTest([sel], ed.time, pt.x, pt.y) ? sel : hit;
+          const hit = hitTest(ed.project, ed.project.layers, ed.time, pt.x, pt.y);
+          const target = sel && hitTest(ed.project, [sel], ed.time, pt.x, pt.y) ? sel : hit;
           if (target) {
             if (target.id !== ed.selectedId) ed.setSelectedId(target.id);
             g.current = {
@@ -79,7 +79,7 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
             const layer = ed.project.layers.find((l) => l.id === cur.id);
             if (!layer) return;
             const pt = toProject(e.nativeEvent.locationX, e.nativeEvent.locationY);
-            const local = projectToLocal(placement(layer, ed.time), pt.x, pt.y);
+            const local = projectToLocal(matrixOf(ed.project, layer, ed.time), pt.x, pt.y);
             stroke.current.push(local.x, local.y);
             setLiveStroke([...stroke.current]);
             return;
@@ -162,19 +162,19 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
 
   const selectionPath = useMemo(() => {
     if (!selected || !isActive(selected, time)) return null;
-    return outline(selected, time, scale);
-  }, [selected, time, scale]);
+    return outline(project, selected, time, scale);
+  }, [project, selected, time, scale]);
 
   const livePath = useMemo(() => {
     if (!liveStroke || !selected) return null;
-    const p = placement(selected, time);
+    const m3 = matrixOf(project, selected, time);
     const pts: number[] = [];
     for (let i = 0; i < liveStroke.length; i += 2) {
-      const q = localToProject(p, liveStroke[i], liveStroke[i + 1]);
+      const q = localToProject(m3, liveStroke[i], liveStroke[i + 1]);
       pts.push(q.x * scale, q.y * scale);
     }
     return buildStrokePath(pts);
-  }, [liveStroke, selected, time, scale]);
+  }, [liveStroke, project, selected, time, scale]);
 
   return (
     <View style={st.wrap} onLayout={(e) => setBox({ w: e.nativeEvent.layout.width - 16, h: e.nativeEvent.layout.height - 16 })}>
@@ -195,20 +195,16 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
   );
 }
 
-function outline(layer: Layer, t: number, scale: number) {
-  const { w, h } = contentSize(layer, t);
-  const p = placement(layer, t);
-  const corners = [
-    [-w / 2, -h / 2],
-    [w / 2, -h / 2],
-    [w / 2, h / 2],
-    [-w / 2, h / 2],
-  ].map(([x, y]) => localToProject(p, x, y));
+const matrixOf = (project: Project, layer: Layer, t: number) => layerMatrix3(viewAt(project, t), placement(layer, t));
+
+function outline(project: Project, layer: Layer, t: number, scale: number) {
+  const corners = layerCorners(project, layer, t);
   const path = Skia.PathBuilder.Make();
   corners.forEach((c, i) => (i === 0 ? path.moveTo(c.x * scale, c.y * scale) : path.lineTo(c.x * scale, c.y * scale)));
   path.close();
   // pivot marker
-  path.addCircle(p.x * scale, p.y * scale, 5);
+  const pivot = localToProject(matrixOf(project, layer, t), placement(layer, t).ax, placement(layer, t).ay);
+  path.addCircle(pivot.x * scale, pivot.y * scale, 5);
   return path.build();
 }
 

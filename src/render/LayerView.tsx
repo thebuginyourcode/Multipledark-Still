@@ -27,7 +27,7 @@ import type {
   VideoLayer,
 } from '../model/types';
 import { hexToRgba, valueAt } from '../model/animate';
-import { contentSize, placement } from '../model/geometry';
+import { contentSize, layerMatrix3, layerTime, placement, type Placement, type View } from '../model/geometry';
 import { EFFECT_MAP, buildSksl } from '../effects/registry';
 import { buildShapePath, buildStrokePath } from './shapes';
 import { getFont, layoutText } from './fonts';
@@ -39,6 +39,7 @@ export interface RenderCtx {
   height: number;
   playing: boolean;
   exporting?: boolean;
+  view: View;
 }
 
 const effectCache = new Map<string, SkRuntimeEffect | null>();
@@ -86,6 +87,7 @@ function effectFilter(fx: EffectInstance, t: number, localT: number, ctx: Render
       />
     );
   }
+  if (def.impl !== 'shader') return null;
   const source = getRuntimeEffect(fx.type);
   if (!source) return null;
   const uniforms: Record<string, number | number[]> = {
@@ -93,6 +95,7 @@ function effectFilter(fx: EffectInstance, t: number, localT: number, ctx: Render
     time: localT,
     p_cx: 50,
     p_cy: 50,
+    p_gmode: 0,
   };
   for (const p of def.params) {
     const v = paramValue(fx, p.key, t, p.default);
@@ -265,30 +268,81 @@ function Content({ layer, ctx }: { layer: Layer; ctx: RenderCtx }) {
       return ctx.exporting ? <VideoStill layer={layer} /> : <VideoContent layer={layer} ctx={ctx} />;
     case 'drawing':
       return <DrawingContent layer={layer} t={ctx.t} />;
+    case 'camera':
+      return null;
   }
 }
 
-/** A layer with its transform and effects applied, but not its opacity / blend mode. */
-export function LayerBody({ layer, ctx }: { layer: Layer; ctx: RenderCtx }) {
-  const p = placement(layer, ctx.t);
-  const transformed = (
-    <Group
-      transform={[
-        { translateX: p.x },
-        { translateY: p.y },
-        { rotate: p.rot },
-        { scaleX: p.sx },
-        { scaleY: p.sy },
-        { translateX: -p.ax },
-        { translateY: -p.ay },
-      ]}
-    >
+function Placed({ layer, ctx, p, opacity }: { layer: Layer; ctx: RenderCtx; p: Placement; opacity?: number }) {
+  const body = (
+    <Group matrix={layerMatrix3(ctx.view, p)}>
       <Content layer={layer} ctx={ctx} />
     </Group>
   );
-  return withEffects(layer, ctx, transformed);
+  return opacity === undefined ? body : <Group opacity={opacity}>{body}</Group>;
 }
 
-export const layerOpacity = (layer: Layer, t: number) => Math.max(0, Math.min(1, valueAt(layer.transform.opacity, t) / 100));
+const fxNum = (layer: Layer, type: string, key: string, t: number) => {
+  const fx = layer.effects.find((e) => e.enabled && e.type === type);
+  return fx ? Number(paramValue(fx, key, t, 0)) : null;
+};
+
+/** A layer with its transform, echo / repeater copies and effects applied, but not its opacity / blend mode. */
+export function LayerBody({ layer, ctx }: { layer: Layer; ctx: RenderCtx }) {
+  const t = layerTime(layer, ctx.t);
+  const lctx = t === ctx.t ? ctx : { ...ctx, t };
+  const main = placement(layer, t);
+  const copies: React.ReactElement[] = [];
+  // videos decode one stream per mounted instance, so they never get copies
+  const canCopy = layer.kind !== 'video';
+
+  const echoCount = canCopy ? fxNum(layer, 'echo', 'count', t) : null;
+  if (echoCount) {
+    const delay = fxNum(layer, 'echo', 'delay', t) ?? 0.1;
+    const decay = (fxNum(layer, 'echo', 'decay', t) ?? 40) / 100;
+    for (let i = Math.round(echoCount); i >= 1; i--) {
+      const et = Math.max(layer.inTime, t - i * delay);
+      copies.push(
+        <Placed key={`e${i}`} layer={layer} ctx={{ ...ctx, t: et }} p={placement(layer, et)} opacity={Math.pow(1 - decay, i)} />,
+      );
+    }
+  }
+
+  const repCount = canCopy ? fxNum(layer, 'repeater', 'copies', t) : null;
+  if (repCount) {
+    const n = (k: string) => fxNum(layer, 'repeater', k, t) ?? 0;
+    const dx = n('dx');
+    const dy = n('dy');
+    const drot = (n('rot') * Math.PI) / 180;
+    const ds = n('scale') / 100;
+    const fade = n('fade') / 100;
+    const delay = n('delay');
+    for (let i = Math.round(repCount); i >= 1; i--) {
+      const rt = Math.max(layer.inTime, t - i * delay);
+      const base = delay > 0 ? placement(layer, rt) : main;
+      const p: Placement = {
+        ...base,
+        x: base.x + dx * i,
+        y: base.y + dy * i,
+        rot: base.rot + drot * i,
+        sx: base.sx * Math.pow(ds, i),
+        sy: base.sy * Math.pow(ds, i),
+      };
+      copies.push(
+        <Placed key={`r${i}`} layer={layer} ctx={rt === t ? lctx : { ...ctx, t: rt }} p={p} opacity={Math.max(0, 1 - fade * i)} />,
+      );
+    }
+  }
+
+  const node = (
+    <Group>
+      {copies}
+      <Placed layer={layer} ctx={lctx} p={main} />
+    </Group>
+  );
+  return withEffects(layer, lctx, node);
+}
+
+export const layerOpacity = (layer: Layer, t: number) => placement(layer, layerTime(layer, t)).opacity;
 
 export { contentSize };

@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { ShapeKind } from '../model/types';
-import { newDrawing, newImage, newShape, newText, newVideo } from '../model/factory';
+import { newCamera, newDrawing, newImage, newShape, newText, newVideo } from '../model/factory';
 import { SHAPE_LABELS } from '../render/shapes';
 import { Section, Slider } from '../ui/controls';
 import { ColorEditor } from '../ui/PropRows';
@@ -60,6 +60,7 @@ export function AddPanel({ editor, onDraw }: { editor: Editor; onDraw: () => voi
               onDraw();
             }}
           />
+          <Tile icon="🎥" label="3D Camera" onPress={() => editor.addLayer(newCamera(project, time))} />
         </View>
       </Section>
       <Section title="Shapes">
@@ -103,6 +104,8 @@ export function AddPanel({ editor, onDraw }: { editor: Editor; onDraw: () => voi
         <Text style={st.label}>
           Size: {project.width}×{project.height}
         </Text>
+        <Text style={st.label}>3D Perspective (focal length): {Math.round(project.perspective)} px</Text>
+        <Slider value={project.perspective} min={200} max={6000} step={10} onChange={(v) => editor.apply((p) => ({ ...p, perspective: v }), 'perspective')} />
         <Text style={st.label}>Background</Text>
         <ColorEditor value={project.background} onChange={(c) => editor.apply((p) => ({ ...p, background: c }), 'bg')} />
       </Section>

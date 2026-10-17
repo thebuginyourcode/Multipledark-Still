@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Project } from './types';
+import { migrateProject } from './factory';
 
 const INDEX_KEY = 'projects:index';
 const projectKey = (id: string) => `projects:${id}`;
@@ -9,7 +10,7 @@ export async function listProjects(): Promise<Project[]> {
   const ids: string[] = raw ? JSON.parse(raw) : [];
   const items = await AsyncStorage.multiGet(ids.map(projectKey));
   return items
-    .map(([, v]) => (v ? (JSON.parse(v) as Project) : null))
+    .map(([, v]) => (v ? migrateProject(JSON.parse(v) as Project) : null))
     .filter((p): p is Project => p !== null)
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }

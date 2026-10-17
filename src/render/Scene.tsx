@@ -1,7 +1,7 @@
 import React from 'react';
 import { Group, Paint, Rect } from '@shopify/react-native-skia';
 import type { Layer, Project } from '../model/types';
-import { isActive } from '../model/geometry';
+import { isActive, viewAt } from '../model/geometry';
 import { LayerBody, layerOpacity, type RenderCtx } from './LayerView';
 
 function Composite({ layer, ctx, children }: { layer: Layer; ctx: RenderCtx; children: React.ReactNode }) {
@@ -20,13 +20,13 @@ export interface SceneProps {
 }
 
 export function Scene({ project, t, playing = false, scale = 1, transparent = false, exporting = false }: SceneProps) {
-  const ctx: RenderCtx = { t, width: project.width, height: project.height, playing, exporting };
+  const ctx: RenderCtx = { t, width: project.width, height: project.height, playing, exporting, view: viewAt(project, t) };
   const { layers } = project;
   const items: React.ReactElement[] = [];
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i];
-    // mask layers are drawn as part of the layer they mask
-    if (layer.maskMode !== 'none') continue;
+    // mask layers are drawn as part of the layer they mask; cameras are never drawn
+    if (layer.maskMode !== 'none' || layer.kind === 'camera') continue;
     // video layers stay mounted so their decoders survive leaving the active range
     if (!isActive(layer, t)) {
       if (layer.kind === 'video' && !exporting) {

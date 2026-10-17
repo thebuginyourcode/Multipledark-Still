@@ -1,4 +1,5 @@
 import type {
+  CameraLayer,
   DrawingLayer,
   EffectInstance,
   ImageLayer,
@@ -25,7 +26,19 @@ export const ASPECTS = [
 
 export function newProject(name: string, w: number, h: number, fps = 30, duration = 10, background = '#101018'): Project {
   const now = Date.now();
-  return { id: uid(), name, width: w, height: h, fps, duration, background, layers: [], createdAt: now, updatedAt: now };
+  return {
+    id: uid(),
+    name,
+    width: w,
+    height: h,
+    fps,
+    duration,
+    background,
+    perspective: 1600,
+    layers: [],
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 const transform = (p: Project): Transform => ({
@@ -34,6 +47,9 @@ const transform = (p: Project): Transform => ({
   scaleX: prop(100),
   scaleY: prop(100),
   rotation: prop(0),
+  rotationX: prop(0),
+  rotationY: prop(0),
+  z: prop(0),
   opacity: prop(100),
   anchorX: prop(0),
   anchorY: prop(0),
@@ -130,6 +146,10 @@ export function newDrawing(p: Project, t: number): DrawingLayer {
   return { ...base(p, 'Drawing', t), kind: 'drawing', strokes: [], trimEnd: prop(100) };
 }
 
+export function newCamera(p: Project, t: number): CameraLayer {
+  return { ...base(p, 'Camera', t), kind: 'camera', focal: prop(p.perspective || 1600) };
+}
+
 export function newEffect(type: string): EffectInstance {
   const def = EFFECT_MAP[type];
   const params: EffectInstance['params'] = {};
@@ -150,4 +170,21 @@ export function cloneWithNewIds<T>(value: T): T {
   };
   walk(copy);
   return copy;
+}
+
+/** Fills in fields added after a project was saved, so older projects keep opening. */
+export function migrateProject(p: Project): Project {
+  return {
+    ...p,
+    perspective: p.perspective ?? 1600,
+    layers: p.layers.map((l) => ({
+      ...l,
+      transform: {
+        ...l.transform,
+        rotationX: l.transform.rotationX ?? prop(0),
+        rotationY: l.transform.rotationY ?? prop(0),
+        z: l.transform.z ?? prop(0),
+      },
+    })),
+  };
 }

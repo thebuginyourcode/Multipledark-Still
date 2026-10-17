@@ -44,10 +44,13 @@ function TransformTab({ editor, layer }: { editor: Editor; layer: Layer }) {
   const { width: W, height: H } = editor.project;
   const big = Math.max(W, H);
   const [linked, setLinked] = useState(true);
+  const isCam = layer.kind === 'camera';
   return (
     <>
       <NumberRow editor={editor} layer={layer} path={['transform', 'x']} label="Position X" min={-big} max={big * 2} />
       <NumberRow editor={editor} layer={layer} path={['transform', 'y']} label="Position Y" min={-big} max={big * 2} />
+      {!isCam && (
+        <>
       <View style={{ flexDirection: 'row', marginBottom: 6 }}>
         <Chip label={linked ? '🔗 Uniform scale' : 'Separate X / Y'} active={linked} onPress={() => setLinked((x) => !x)} />
       </View>
@@ -59,17 +62,28 @@ function TransformTab({ editor, layer }: { editor: Editor; layer: Layer }) {
           <NumberRow editor={editor} layer={layer} path={['transform', 'scaleY']} label="Scale Y %" min={-400} max={400} />
         </>
       )}
+        </>
+      )}
       <NumberRow editor={editor} layer={layer} path={['transform', 'rotation']} label="Rotation °" min={-720} max={720} />
-      <NumberRow editor={editor} layer={layer} path={['transform', 'opacity']} label="Opacity %" min={0} max={100} />
-      <NumberRow editor={editor} layer={layer} path={['transform', 'anchorX']} label="Pivot X" min={-big} max={big} />
-      <NumberRow editor={editor} layer={layer} path={['transform', 'anchorY']} label="Pivot Y" min={-big} max={big} />
+      <Section title="3D">
+        <NumberRow editor={editor} layer={layer} path={['transform', 'rotationX']} label="Rotation X ° (tilt)" min={-360} max={360} />
+        <NumberRow editor={editor} layer={layer} path={['transform', 'rotationY']} label="Rotation Y ° (turn)" min={-360} max={360} />
+        <NumberRow editor={editor} layer={layer} path={['transform', 'z']} label="Depth Z (+ is closer)" min={-big * 2} max={big} />
+      </Section>
+      {!isCam && (
+        <>
+          <NumberRow editor={editor} layer={layer} path={['transform', 'opacity']} label="Opacity %" min={0} max={100} />
+          <NumberRow editor={editor} layer={layer} path={['transform', 'anchorX']} label="Pivot X" min={-big} max={big} />
+          <NumberRow editor={editor} layer={layer} path={['transform', 'anchorY']} label="Pivot Y" min={-big} max={big} />
+        </>
+      )}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         <Btn small label="Center" onPress={() => {
           editor.setProp(layer.id, ['transform', 'x'], W / 2);
           editor.setProp(layer.id, ['transform', 'y'], H / 2);
         }} />
-        <Btn small label="Flip H" onPress={() => editor.setProp(layer.id, ['transform', 'scaleX'], -layerScale(layer, editor, 'scaleX'))} />
-        <Btn small label="Flip V" onPress={() => editor.setProp(layer.id, ['transform', 'scaleY'], -layerScale(layer, editor, 'scaleY'))} />
+        {!isCam && <Btn small label="Flip H" onPress={() => editor.setProp(layer.id, ['transform', 'scaleX'], -layerScale(layer, editor, 'scaleX'))} />}
+        {!isCam && <Btn small label="Flip V" onPress={() => editor.setProp(layer.id, ['transform', 'scaleY'], -layerScale(layer, editor, 'scaleY'))} />}
       </View>
     </>
   );
@@ -204,6 +218,16 @@ function StyleTab({ editor, layer }: { editor: Editor; layer: Layer }) {
       </>
     );
   }
+  if (layer.kind === 'camera') {
+    return (
+      <Section title="Camera">
+        <Text style={st.hint}>
+          While this layer is active, every layer is seen through it. Animate Position, Depth Z and Rotation X / Y / Z in Move and Transform to pan, dolly and orbit. Give layers different Depth Z values for parallax.
+        </Text>
+        <NumberRow editor={editor} layer={layer} path={['focal']} label="Focal Length (smaller = stronger perspective)" min={100} max={6000} />
+      </Section>
+    );
+  }
   if (layer.kind === 'drawing') {
     return (
       <Section title="Drawing">
@@ -232,7 +256,10 @@ function StyleTab({ editor, layer }: { editor: Editor; layer: Layer }) {
 function EffectsTab({ editor, layer }: { editor: Editor; layer: Layer }) {
   const [browsing, setBrowsing] = useState(false);
   const [cat, setCat] = useState(CATEGORIES[0]);
+  const [query, setQuery] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const q = query.trim().toLowerCase();
+  const shown = q ? EFFECTS.filter((e) => e.name.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)) : EFFECTS.filter((e) => e.category === cat);
 
   const updateEffects = (fx: Layer['effects']) => editor.setField(layer.id, ['effects'], fx, false);
 
@@ -243,13 +270,24 @@ function EffectsTab({ editor, layer }: { editor: Editor; layer: Layer }) {
           <Text style={st.title}>Add Effect</Text>
           <Btn small label="Close" onPress={() => setBrowsing(false)} />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 6 }}>
-          {CATEGORIES.map((c) => (
-            <Chip key={c} label={c} active={cat === c} onPress={() => setCat(c)} />
-          ))}
-        </ScrollView>
+        <TextInput
+          style={st.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={`Search ${EFFECTS.length} effects`}
+          placeholderTextColor={C.faint}
+          autoCorrect={false}
+        />
+        {!q && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 6 }}>
+            {CATEGORIES.map((c) => (
+              <Chip key={c} label={`${c} ${EFFECTS.filter((e) => e.category === c).length}`} active={cat === c} onPress={() => setCat(c)} />
+            ))}
+          </ScrollView>
+        )}
+        {q && shown.length === 0 && <Text style={st.hint}>No effects match “{query}”.</Text>}
         <View style={st.fxGrid}>
-          {EFFECTS.filter((e) => e.category === cat).map((e) => (
+          {shown.map((e) => (
             <Pressable
               key={e.type}
               style={st.fxTile}
@@ -258,6 +296,7 @@ function EffectsTab({ editor, layer }: { editor: Editor; layer: Layer }) {
                 updateEffects([...layer.effects, fx]);
                 setOpen(fx.id);
                 setBrowsing(false);
+                setQuery('');
               }}
             >
               <Text style={st.fxTileText}>{e.name}</Text>
@@ -420,6 +459,16 @@ const st = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 6,
+  },
+  search: {
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    fontSize: 14,
   },
   fxTileText: { color: C.text, fontSize: 12, fontWeight: '600', textAlign: 'center' },
   fxCard: { backgroundColor: C.panel2, borderRadius: 12, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: C.line },

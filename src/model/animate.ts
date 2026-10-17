@@ -1,4 +1,5 @@
 import type { Easing, Keyframe, Prop } from './types';
+import { wave } from './wave';
 
 let idCounter = 0;
 export const uid = () =>
@@ -71,6 +72,15 @@ const lerp = <T>(a: T, b: T, k: number): T => {
 export const sortKeys = <T>(kfs: Keyframe<T>[]) => [...kfs].sort((a, b) => a.t - b.t);
 
 export function valueAt<T>(p: Prop<T>, t: number): T {
+  const base = keyedValueAt(p, t);
+  const o = p.osc;
+  if (o?.enabled && typeof base === 'number') {
+    return (base + wave(o.wave, t * o.freq + o.phase / 360, o.phase) * o.amp) as T;
+  }
+  return base;
+}
+
+function keyedValueAt<T>(p: Prop<T>, t: number): T {
   const kfs = p.keyframes;
   if (kfs.length === 0) return p.value;
   if (kfs.length === 1 || t <= kfs[0].t) return kfs[0].v;
@@ -107,11 +117,11 @@ export function toggleKey<T>(p: Prop<T>, t: number): Prop<T> {
   const existing = keyframeAt(p, t);
   if (existing) {
     const keyframes = p.keyframes.filter((k) => k !== existing);
-    return { value: keyframes.length === 0 ? existing.v : p.value, keyframes };
+    return { ...p, value: keyframes.length === 0 ? existing.v : p.value, keyframes };
   }
   return {
     ...p,
-    keyframes: sortKeys([...p.keyframes, { id: uid(), t, v: valueAt(p, t), easing: 'easeInOut' }]),
+    keyframes: sortKeys([...p.keyframes, { id: uid(), t, v: keyedValueAt(p, t), easing: 'easeInOut' }]),
   };
 }
 

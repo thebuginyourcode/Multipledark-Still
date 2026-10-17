@@ -1,3 +1,5 @@
+import type { Wave } from './wave';
+
 export type Easing =
   | 'linear'
   | 'hold'
@@ -16,9 +18,18 @@ export interface Keyframe<T> {
   easing: Easing; // easing used from this keyframe to the next one
 }
 
+export interface Oscillator {
+  enabled: boolean;
+  wave: Wave;
+  amp: number;
+  freq: number; // cycles per second
+  phase: number; // degrees
+}
+
 export interface Prop<T> {
   value: T; // used when there are no keyframes
   keyframes: Keyframe<T>[];
+  osc?: Oscillator; // numeric props only: added on top of the keyframed value
 }
 
 export type NumProp = Prop<number>;
@@ -53,7 +64,7 @@ export type ShapeKind =
   | 'ring'
   | 'arrow';
 
-export type LayerKind = 'shape' | 'text' | 'image' | 'video' | 'drawing';
+export type LayerKind = 'shape' | 'text' | 'image' | 'video' | 'drawing' | 'camera';
 
 export interface Transform {
   x: NumProp;
@@ -61,6 +72,9 @@ export interface Transform {
   scaleX: NumProp; // percent
   scaleY: NumProp; // percent
   rotation: NumProp; // degrees
+  rotationX: NumProp; // degrees, 3D tilt
+  rotationY: NumProp; // degrees, 3D turn
+  z: NumProp; // depth in px, positive is toward the viewer
   opacity: NumProp; // 0..100
   anchorX: NumProp; // offset of pivot from content center, px
   anchorY: NumProp;
@@ -160,7 +174,13 @@ export interface DrawingLayer extends LayerBase {
   trimEnd: NumProp; // write-on animation
 }
 
-export type Layer = ShapeLayer | TextLayer | ImageLayer | VideoLayer | DrawingLayer;
+/** Not drawn. While active, views every layer through its position / rotation / zoom. */
+export interface CameraLayer extends LayerBase {
+  kind: 'camera';
+  focal: NumProp; // focal length in px; smaller = stronger perspective
+}
+
+export type Layer = ShapeLayer | TextLayer | ImageLayer | VideoLayer | DrawingLayer | CameraLayer;
 
 export interface Project {
   id: string;
@@ -170,6 +190,7 @@ export interface Project {
   fps: number;
   duration: number; // seconds
   background: string;
+  perspective: number; // focal length in px used for 3D layers when no camera is active
   layers: Layer[]; // index 0 is bottom-most
   createdAt: number;
   updatedAt: number;

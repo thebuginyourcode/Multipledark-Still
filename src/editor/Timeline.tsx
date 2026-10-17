@@ -14,6 +14,7 @@ const KIND_COLORS: Record<Layer['kind'], string> = {
   image: '#3ddc97',
   video: '#ff8a3d',
   drawing: '#b15cff',
+  camera: '#c8c8d0',
 };
 
 /** All keyframe times anywhere in a layer (transform, style, effect params...). */

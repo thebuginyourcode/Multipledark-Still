@@ -535,7 +535,7 @@ export function Inspector({ editor, layer, tool, setTool }: { editor: Editor; la
         {tabs.map((t) => (
           <Pressable key={t.key} style={st.tabBtn} onPress={() => setTab(t.key)}>
             <Icon name={t.icon} size={22} color={tab === t.key ? C.accent : C.dim} />
-            <Text style={[st.tabText, tab === t.key && { color: C.accent }]} numberOfLines={1}>
+            <Text style={[st.tabText, tab === t.key && { color: C.accent }]} numberOfLines={2}>
               {t.label}
             </Text>
           </Pressable>
@@ -554,8 +554,8 @@ const st = StyleSheet.create({
   toolBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   toolActive: { backgroundColor: C.accent },
   tabBar: { flexGrow: 0, borderTopWidth: 1, borderColor: C.line, backgroundColor: C.bg },
-  tabBtn: { width: 76, alignItems: 'center', paddingVertical: 7 },
-  tabText: { color: C.dim, fontSize: 10, marginTop: 2, fontWeight: '600' },
+  tabBtn: { width: 82, alignItems: 'center', paddingVertical: 7 },
+  tabText: { color: C.dim, fontSize: 10, marginTop: 2, fontWeight: '600', textAlign: 'center', lineHeight: 12 },
   addFx: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -54,8 +54,20 @@ export interface EffectDef {
   params: ParamDef[];
   // 'shader' effects use `sksl`; 'gaussianBlur' / 'dropShadow' map to built-in
   // Skia image filters; 'motion' effects change the layer transform; 'echo',
-  // 'repeater' and 'posterizeTime' change how the layer itself is drawn.
-  impl: 'shader' | 'gaussianBlur' | 'dropShadow' | 'motion' | 'echo' | 'repeater' | 'posterizeTime';
+  // 'repeater', 'radialRepeat', 'cube', 'posterizeTime', 'counter' and
+  // 'drawingProgress' change how the layer itself is drawn.
+  impl:
+    | 'shader'
+    | 'gaussianBlur'
+    | 'dropShadow'
+    | 'motion'
+    | 'echo'
+    | 'repeater'
+    | 'radialRepeat'
+    | 'cube'
+    | 'posterizeTime'
+    | 'counter'
+    | 'drawingProgress';
   sksl?: string;
 }
 

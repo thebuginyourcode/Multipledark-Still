@@ -382,7 +382,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'bevel',
-    name: 'Bevel & Emboss',
+    name: 'Smooth Bevel',
     category: 'Stylize',
     impl: 'shader',
     params: [num('size', 'Size', 1, 40, 8), num('angle', 'Light Angle', -180, 180, -135), num('strength', 'Strength', 0, 200, 100)],

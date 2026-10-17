@@ -109,6 +109,21 @@ export const MOTION_FNS: Record<string, MotionFn> = {
     if (fo > 0 && t > dur - fo) k = Math.min(k, (dur - t) / fo);
     d.opacity *= Math.max(0, k);
   },
+  blink: (p, t, _dur, d) => {
+    const f = t * p('freq');
+    if (f - Math.floor(f) >= p('duty') / 100) d.opacity = 0;
+  },
+  pulseOpacity: (p, t, _dur, d) => {
+    const k = (Math.sin(t * p('freq') * 2 * Math.PI) + 1) / 2;
+    d.opacity *= 1 - (k * p('amount')) / 100;
+  },
+  randomJitter: (p, t, _dur, d) => {
+    const step = Math.floor(t * p('freq'));
+    const v = (noise1(step + 0.5 + p('seed') * 3.1) * 2 - 1) * p('amount');
+    const a = (p('angle') * Math.PI) / 180;
+    d.x += Math.cos(a) * v;
+    d.y += Math.sin(a) * v;
+  },
   slideIn: (p, t, _dur, d) => {
     const dur = Math.max(0.01, p('duration'));
     if (t >= dur) return;
@@ -226,6 +241,27 @@ export const MOTION_EFFECTS: EffectDef[] = [
     impl: 'motion',
     params: [num('duration', 'Duration (s)', 0.05, 3, 0.6, 0.05), num('distance', 'Distance', 0, 3000, 400), num('angle', 'From Direction °', -180, 180, 0)],
   },
+  {
+    type: 'blink',
+    name: 'Blink',
+    category: 'Motion',
+    impl: 'motion',
+    params: [num('freq', 'Frequency', 0, 16, 2, 0.1), num('duty', 'Visible %', 1, 99, 50)],
+  },
+  {
+    type: 'pulseOpacity',
+    name: 'Pulse Opacity',
+    category: 'Motion',
+    impl: 'motion',
+    params: [num('amount', 'Amount %', 0, 100, 60), num('freq', 'Frequency', 0.1, 20, 1.5, 0.1)],
+  },
+  {
+    type: 'randomJitter',
+    name: 'Random Jitter',
+    category: 'Motion',
+    impl: 'motion',
+    params: [num('amount', 'Distance', 0, 1000, 40), num('angle', 'Angle', -180, 180, 0), num('freq', 'Jumps / sec', 0.5, 60, 8, 0.5), num('seed', 'Seed', 0, 100, 1, 1)],
+  },
   // ---------------------------------------------------------------- Time & Repeat
   {
     type: 'echo',
@@ -248,6 +284,46 @@ export const MOTION_EFFECTS: EffectDef[] = [
       num('fade', 'Opacity Falloff %', 0, 100, 0),
       num('delay', 'Time Offset (s)', 0, 2, 0, 0.01),
     ],
+  },
+  {
+    type: 'radialRepeat',
+    name: 'Radial Repeat',
+    category: 'Time & Repeat',
+    impl: 'radialRepeat',
+    params: [
+      num('count', 'Copies', 2, 36, 6, 1),
+      num('radius', 'Radius', 0, 2000, 250),
+      num('start', 'Start Angle °', -360, 360, 0),
+      num('arc', 'Arc °', 10, 360, 360),
+      choice('orient', 'Copies', ['Rotate with circle', 'Keep upright']),
+    ],
+  },
+  {
+    type: 'cube',
+    name: 'Cube',
+    category: 'Distort',
+    impl: 'cube',
+    params: [num('rx', 'Rotation X °', -360, 360, -20), num('ry', 'Rotation Y °', -360, 360, 35), num('depth', 'Depth %', 10, 300, 100)],
+  },
+  {
+    type: 'countUpDown',
+    name: 'Count Up/Down',
+    category: 'Time & Repeat',
+    impl: 'counter',
+    params: [
+      num('from', 'From', -100000, 100000, 0),
+      num('to', 'To', -100000, 100000, 100),
+      num('decimals', 'Decimal Places', 0, 4, 0, 1),
+      choice('ease', 'Easing', ['Linear', 'Ease Out', 'Ease In/Out']),
+      choice('sep', 'Thousands Separator', ['None', 'Comma', 'Space']),
+    ],
+  },
+  {
+    type: 'drawingProgress',
+    name: 'Drawing Progress',
+    category: 'Reveal',
+    impl: 'drawingProgress',
+    params: [num('start', 'Start %', 0, 100, 0), num('end', 'End %', 0, 100, 100)],
   },
   {
     type: 'posterizeTime',

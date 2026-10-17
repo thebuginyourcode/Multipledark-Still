@@ -40,6 +40,27 @@ export interface TextLayout {
   scale: number; // fontSize / BASE_FONT_SIZE
 }
 
+const SEPARATORS = ['', ',', ' '];
+
+/** Text after the Count Up/Down effect: '#' in the text marks where the number goes. */
+export function displayText(layer: TextLayer, t: number): string {
+  const fx = layer.effects.find((e) => e.enabled && e.type === 'countUpDown');
+  if (!fx) return layer.text;
+  const n = (k: string) => (fx.params[k] ? Number(valueAt(fx.params[k], t)) : 0);
+  const dur = Math.max(0.001, layer.outTime - layer.inTime);
+  let k = Math.max(0, Math.min(1, (t - layer.inTime) / dur));
+  const ease = Math.round(n('ease'));
+  if (ease === 1) k = 1 - Math.pow(1 - k, 3);
+  else if (ease === 2) k = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  const decimals = Math.max(0, Math.min(4, Math.round(n('decimals'))));
+  const value = n('from') + (n('to') - n('from')) * k;
+  const [int, frac] = Math.abs(value).toFixed(decimals).split('.');
+  const sep = SEPARATORS[Math.round(n('sep'))] ?? '';
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+  const num = `${value < 0 && Number(value.toFixed(decimals)) !== 0 ? '-' : ''}${grouped}${frac ? `.${frac}` : ''}`;
+  return layer.text.includes('#') ? layer.text.split('#').join(num) : num;
+}
+
 export function layoutText(layer: TextLayer, t: number): TextLayout {
   const font = getFont(layer.fontFamily, layer.fontWeight === 'bold', layer.italic);
   const fontSize = Math.max(1, valueAt(layer.fontSize, t));
@@ -47,7 +68,7 @@ export function layoutText(layer: TextLayer, t: number): TextLayout {
   const spacing = valueAt(layer.letterSpacing, t) / scale;
   const lineH = (BASE_FONT_SIZE * valueAt(layer.lineHeight, t)) / 100;
   const metrics = font.getMetrics();
-  const lines = (layer.text || ' ').split('\n');
+  const lines = (displayText(layer, t) || ' ').split('\n');
 
   const measured = lines.map((line) => {
     const ids = font.getGlyphIDs(line);

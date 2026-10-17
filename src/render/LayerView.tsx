@@ -28,6 +28,7 @@ import type {
 } from '../model/types';
 import { hexToRgba, valueAt } from '../model/animate';
 import { contentSize, layerMatrix3, layerTime, placement, type Placement, type View } from '../model/geometry';
+import { apply3, chain, rotateX4, rotateY4, scale4, translate4, type M4 } from '../model/mat';
 import { EFFECT_MAP, buildSksl } from '../effects/registry';
 import { buildShapePath, buildStrokePath } from './shapes';
 import { getFont, layoutText } from './fonts';
@@ -129,6 +130,16 @@ function FillShader({ style, t, w, h }: { style: Style; t: number; w: number; h:
   return <LinearGradient start={vec(-dx, -dy)} end={vec(dx, dy)} colors={[c1, c2]} />;
 }
 
+/** Visible outline range from the Drawing Progress effect, as fractions. */
+function drawRange(layer: Layer, t: number) {
+  const fx = layer.effects.find((e) => e.enabled && e.type === 'drawingProgress');
+  if (!fx) return { start: 0, end: 1 };
+  const n = (k: string, d: number) => (fx.params[k] ? Number(valueAt(fx.params[k], t)) / 100 : d);
+  const a = Math.max(0, Math.min(1, n('start', 0)));
+  const b = Math.max(0, Math.min(1, n('end', 1)));
+  return { start: Math.min(a, b), end: Math.max(a, b) };
+}
+
 function ShapeContent({ layer, t }: { layer: ShapeLayer; t: number }) {
   const w = Math.max(1, valueAt(layer.width, t));
   const h = Math.max(1, valueAt(layer.height, t));
@@ -139,12 +150,14 @@ function ShapeContent({ layer, t }: { layer: ShapeLayer; t: number }) {
     () => buildShapePath({ kind: layer.shape, w, h, radius, points, inner }),
     [layer.shape, w, h, radius, points, inner],
   );
-  const trim = valueAt(layer.trimEnd, t) / 100;
+  const range = drawRange(layer, t);
+  const start = range.start;
+  const trim = Math.min(range.end, valueAt(layer.trimEnd, t) / 100);
   const s = layer.style;
   return (
     <>
       {s.fillEnabled && (
-        <Path path={path} color={valueAt(s.fill, t)} end={trim} fillType={layer.shape === 'ring' ? 'evenOdd' : 'winding'}>
+        <Path path={path} color={valueAt(s.fill, t)} start={start} end={trim} fillType={layer.shape === 'ring' ? 'evenOdd' : 'winding'}>
           <FillShader style={s} t={t} w={w} h={h} />
         </Path>
       )}
@@ -156,6 +169,7 @@ function ShapeContent({ layer, t }: { layer: ShapeLayer; t: number }) {
           strokeJoin="round"
           strokeCap="round"
           color={valueAt(s.stroke, t)}
+          start={start}
           end={trim}
         />
       )}
@@ -233,12 +247,16 @@ function VideoStill({ layer }: { layer: VideoLayer }) {
 
 function DrawingContent({ layer, t }: { layer: DrawingLayer; t: number }) {
   const paths = useMemo(() => layer.strokes.map((s) => buildStrokePath(s.points)), [layer.strokes]);
-  const progress = (valueAt(layer.trimEnd, t) / 100) * layer.strokes.length;
+  const range = drawRange(layer, t);
+  const n = layer.strokes.length;
+  const progress = Math.min(range.end, valueAt(layer.trimEnd, t) / 100) * n;
+  const from = range.start * n;
   return (
     <>
       {layer.strokes.map((s, i) => {
         const end = Math.max(0, Math.min(1, progress - i));
-        if (end <= 0) return null;
+        const start = Math.max(0, Math.min(1, from - i));
+        if (end <= start) return null;
         return (
           <Path
             key={i}
@@ -248,6 +266,7 @@ function DrawingContent({ layer, t }: { layer: DrawingLayer; t: number }) {
             strokeCap="round"
             strokeJoin="round"
             color={s.color}
+            start={start}
             end={end}
           />
         );
@@ -273,9 +292,21 @@ function Content({ layer, ctx }: { layer: Layer; ctx: RenderCtx }) {
   }
 }
 
-function Placed({ layer, ctx, p, opacity }: { layer: Layer; ctx: RenderCtx; p: Placement; opacity?: number }) {
+function Placed({
+  layer,
+  ctx,
+  p,
+  opacity,
+  extra,
+}: {
+  layer: Layer;
+  ctx: RenderCtx;
+  p: Placement;
+  opacity?: number;
+  extra?: M4;
+}) {
   const body = (
-    <Group matrix={layerMatrix3(ctx.view, p)}>
+    <Group matrix={layerMatrix3(ctx.view, p, extra)}>
       <Content layer={layer} ctx={ctx} />
     </Group>
   );
@@ -334,10 +365,58 @@ export function LayerBody({ layer, ctx }: { layer: Layer; ctx: RenderCtx }) {
     }
   }
 
+  let primary: React.ReactNode = <Placed layer={layer} ctx={lctx} p={main} />;
+
+  const radCount = canCopy ? fxNum(layer, 'radialRepeat', 'count', t) : null;
+  if (radCount) {
+    const n = (k: string) => fxNum(layer, 'radialRepeat', k, t) ?? 0;
+    const count = Math.max(2, Math.round(radCount));
+    const arc = n('arc');
+    const step = arc >= 359.9 ? arc / count : arc / (count - 1);
+    const upright = Math.round(n('orient')) === 1;
+    primary = Array.from({ length: count }, (_, i) => {
+      const a = ((n('start') + step * i) * Math.PI) / 180;
+      const p: Placement = {
+        ...main,
+        x: main.x + Math.cos(a) * n('radius'),
+        y: main.y + Math.sin(a) * n('radius'),
+        rot: upright ? main.rot : main.rot + a + Math.PI / 2,
+      };
+      return <Placed key={`rr${i}`} layer={layer} ctx={lctx} p={p} />;
+    });
+  }
+
+  if (canCopy && fxNum(layer, 'cube', 'depth', t) !== null) {
+    const n = (k: string) => fxNum(layer, 'cube', k, t) ?? 0;
+    const { w, h } = contentSize(layer, t);
+    const d = Math.max(1, (w * n('depth')) / 100);
+    const spin = chain(rotateY4((n('ry') * Math.PI) / 180), rotateX4((n('rx') * Math.PI) / 180));
+    const H = Math.PI / 2;
+    const faces: M4[] = [
+      translate4(0, 0, d / 2),
+      chain(translate4(0, 0, -d / 2), rotateY4(Math.PI)),
+      chain(translate4(w / 2, 0, 0), rotateY4(H), scale4(d / w, 1)),
+      chain(translate4(-w / 2, 0, 0), rotateY4(-H), scale4(d / w, 1)),
+      chain(translate4(0, -h / 2, 0), rotateX4(H), scale4(1, d / h)),
+      chain(translate4(0, h / 2, 0), rotateX4(-H), scale4(1, d / h)),
+    ];
+    primary = faces.map((f, i) => {
+      const extra = chain(spin, f);
+      // back-face culling: keep faces whose projected corners wind clockwise (y down)
+      const m3 = layerMatrix3(lctx.view, main, extra);
+      const a = apply3(m3, -w / 2, -h / 2);
+      const b = apply3(m3, w / 2, -h / 2);
+      const c = apply3(m3, w / 2, h / 2);
+      if (a.w <= 0 || b.w <= 0 || c.w <= 0) return null;
+      if ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) <= 0) return null;
+      return <Placed key={`cube${i}`} layer={layer} ctx={lctx} p={main} extra={extra} />;
+    });
+  }
+
   const node = (
     <Group>
       {copies}
-      <Placed layer={layer} ctx={lctx} p={main} />
+      {primary}
     </Group>
   );
   return withEffects(layer, lctx, node);

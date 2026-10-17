@@ -2,6 +2,7 @@
 import { center, choice, color, colorFx, num, type EffectDef } from './defs';
 import { MORE_EFFECTS } from './more';
 import { MOTION_EFFECTS } from './motion';
+import { ALIGHT_EFFECTS } from './alight';
 
 export * from './defs';
 
@@ -415,13 +416,23 @@ half4 main(float2 xy) {
   },
   {
     type: 'tile',
-    name: 'Tile / Repeat',
+    name: 'Tiles',
     category: 'Distort',
     impl: 'shader',
-    params: [num('cols', 'Columns', 1, 12, 2, 1), num('rows', 'Rows', 1, 12, 2, 1), choice('flip', 'Edges', ['Repeat', 'Mirror'])],
+    params: [
+      num('cols', 'Columns', 1, 12, 2, 1),
+      num('rows', 'Rows', 1, 12, 2, 1),
+      choice('flip', 'Mirror', ['Off', 'On']),
+      choice('shift', 'Offset', ['None', 'Offset Vertically', 'Offset Horizontally']),
+      num('angle', 'Angle', -180, 180, 0),
+    ],
     sksl: `
 half4 main(float2 xy) {
-  float2 g = xy / res * float2(p_cols, p_rows);
+  float2 c = res * 0.5;
+  float2 p = rot(xy - c, -radians(p_angle)) + c;
+  float2 g = p / res * float2(p_cols, p_rows);
+  if (p_shift > 0.5 && p_shift < 1.5) { g.y += 0.5 * mod(floor(g.x), 2.0); }
+  if (p_shift > 1.5) { g.x += 0.5 * mod(floor(g.y), 2.0); }
   float2 f = fract(g);
   if (p_flip > 0.5) { float2 cell = floor(g); f = mix(f, 1.0 - f, mod(cell, 2.0)); }
   return image.eval(f * res);
@@ -467,7 +478,7 @@ half4 main(float2 xy) { float s = max(1.0, p_size); return image.eval((floor(xy 
   },
   {
     type: 'squeeze',
-    name: 'Stretch / Squeeze',
+    name: 'Stretch Axis',
     category: 'Distort',
     impl: 'shader',
     params: [num('sx', 'Stretch X %', 10, 400, 100), num('sy', 'Stretch Y %', 10, 400, 100), ...center],
@@ -939,6 +950,6 @@ half4 main(float2 xy) {
   },
 ];
 
-export const EFFECTS: EffectDef[] = [...MOTION_EFFECTS, ...CORE_EFFECTS, ...MORE_EFFECTS];
+export const EFFECTS: EffectDef[] = [...MOTION_EFFECTS, ...CORE_EFFECTS, ...MORE_EFFECTS, ...ALIGHT_EFFECTS];
 
 export const EFFECT_MAP: Record<string, EffectDef> = Object.fromEntries(EFFECTS.map((e) => [e.type, e]));

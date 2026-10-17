@@ -145,8 +145,9 @@ export function modelMatrix(p: Placement): M4 {
   );
 }
 
-/** Local content space -> project space, as a 3x3 homography. */
-export const layerMatrix3 = (view: View, p: Placement) => to3x3(chain(view.proj, modelMatrix(p)));
+/** Local content space -> project space, as a 3x3 homography. `extra` is applied in content space first. */
+export const layerMatrix3 = (view: View, p: Placement, extra?: M4) =>
+  to3x3(extra ? chain(view.proj, modelMatrix(p), extra) : chain(view.proj, modelMatrix(p)));
 
 export function localToProject(m3: number[], lx: number, ly: number) {
   const q = apply3(m3, lx, ly);

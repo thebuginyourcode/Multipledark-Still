@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Still Motion",
+    "slug": "still-motion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.multipledark.stillmotion"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d0d12",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.multipledark.stillmotion"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Still Motion needs access to your photos to import images and videos into your projects."
+        }
+      ]
+    ],
+    "backgroundColor": "#0d0d12"
+  }
+}

@@ -7,6 +7,7 @@ import { setAt, valueAt } from '../model/animate';
 import { hitTest, isActive, layerCorners, layerMatrix3, localToProject, placement, projectToLocal, viewAt } from '../model/geometry';
 import type { DrawingLayer, Layer, Project } from '../model/types';
 import type { Editor } from './useEditor';
+import type { Tool } from './Inspector';
 import { C } from '../ui/theme';
 
 export interface Brush {
@@ -16,14 +17,14 @@ export interface Brush {
 
 type GestureState =
   | { mode: 'none' }
-  | { mode: 'move'; id: string; x0: number; y0: number; moved: boolean }
+  | { mode: 'move'; id: string; start: Layer['transform']; px: number; py: number; moved: boolean }
   | { mode: 'pinch'; id: string; d0: number; a0: number; sx0: number; sy0: number; r0: number }
   | { mode: 'draw'; id: string }
   | { mode: 'tap' };
 
 const touchesOf = (e: GestureResponderEvent) => e.nativeEvent.touches;
 
-export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode: boolean; brush: Brush }) {
+export function Preview({ editor, drawMode, brush, tool }: { editor: Editor; drawMode: boolean; brush: Brush; tool: Tool }) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const { project, time, selected } = editor;
   const scale = box.w > 0 ? Math.min(box.w / project.width, box.h / project.height) : 0;
@@ -31,8 +32,8 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
   const ch = project.height * scale;
   const [liveStroke, setLiveStroke] = useState<number[] | null>(null);
 
-  const ref = useRef({ editor, scale, drawMode, brush });
-  ref.current = { editor, scale, drawMode, brush };
+  const ref = useRef({ editor, scale, drawMode, brush, tool });
+  ref.current = { editor, scale, drawMode, brush, tool };
   const g = useRef<GestureState>({ mode: 'none' });
   const stroke = useRef<number[]>([]);
 
@@ -60,19 +61,13 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
           const target = sel && hitTest(ed.project, [sel], ed.time, pt.x, pt.y) ? sel : hit;
           if (target) {
             if (target.id !== ed.selectedId) ed.setSelectedId(target.id);
-            g.current = {
-              mode: 'move',
-              id: target.id,
-              x0: valueAt(target.transform.x, ed.time),
-              y0: valueAt(target.transform.y, ed.time),
-              moved: false,
-            };
+            g.current = { mode: 'move', id: target.id, start: target.transform, px: pt.x, py: pt.y, moved: false };
           } else {
             g.current = { mode: 'tap' };
           }
         },
         onPanResponderMove: (e, gs) => {
-          const { editor: ed, scale: sc } = ref.current;
+          const { editor: ed, scale: sc, tool: tl } = ref.current;
           const touches = touchesOf(e);
           const cur = g.current;
           if (cur.mode === 'draw') {
@@ -122,19 +117,45 @@ export function Preview({ editor, drawMode, brush }: { editor: Editor; drawMode:
           if (cur.mode === 'move') {
             if (Math.abs(gs.dx) + Math.abs(gs.dy) < 3 && !cur.moved) return;
             cur.moved = true;
+            const t = ed.time;
+            const v = (k: keyof Layer['transform']) => valueAt(cur.start[k], t);
+            const dx = gs.dx / sc;
+            const dy = gs.dy / sc;
+            // pointer position relative to the layer's pivot, at the start and now
+            const cx = v('x');
+            const cy = v('y');
+            const sx = cur.px - cx;
+            const sy = cur.py - cy;
+            const nx = sx + dx;
+            const ny = sy + dy;
+            const next: Partial<Record<keyof Layer['transform'], number>> = {};
+            if (tl === 'move') {
+              next.x = Math.round(cx + dx);
+              next.y = Math.round(cy + dy);
+            } else if (tl === 'rotate') {
+              next.rotation = v('rotation') + ((Math.atan2(ny, nx) - Math.atan2(sy, sx)) * 180) / Math.PI;
+            } else if (tl === 'scale') {
+              const k = Math.hypot(nx, ny) / Math.max(1, Math.hypot(sx, sy));
+              next.scaleX = v('scaleX') * k;
+              next.scaleY = v('scaleY') * k;
+            } else if (tl === '3d') {
+              next.rotationY = v('rotationY') + dx * 0.3;
+              next.rotationX = v('rotationX') - dy * 0.3;
+            } else if (tl === 'pivot') {
+              // move the pivot, shifting position too so the layer stays put (exact when unrotated)
+              next.anchorX = v('anchorX') + dx / ((v('scaleX') / 100) || 1);
+              next.anchorY = v('anchorY') + dy / ((v('scaleY') / 100) || 1);
+              next.x = cx + dx;
+              next.y = cy + dy;
+            }
             ed.updateLayer(
               cur.id,
-              (l) =>
-                l.locked
-                  ? l
-                  : {
-                      ...l,
-                      transform: {
-                        ...l.transform,
-                        x: setAt(l.transform.x, ed.time, Math.round(cur.x0 + gs.dx / sc)),
-                        y: setAt(l.transform.y, ed.time, Math.round(cur.y0 + gs.dy / sc)),
-                      },
-                    },
+              (l) => {
+                if (l.locked) return l;
+                const tr = { ...l.transform };
+                for (const [k, val] of Object.entries(next) as [keyof Layer['transform'], number][]) tr[k] = setAt(tr[k], t, val);
+                return { ...l, transform: tr };
+              },
               `${cur.id}:gesture`,
             );
           }

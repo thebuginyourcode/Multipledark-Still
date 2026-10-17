@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Canvas, Circle, LinearGradient, RadialGradient, RoundedRect, SweepGradient, vec } from '@shopify/react-native-skia';
 import type { Easing, Layer, Oscillator, Prop } from '../model/types';
 import { WAVES, WAVE_LABELS } from '../model/wave';
 import { EASING_LABELS, isAnimated, keyframeAt, valueAt } from '../model/animate';
@@ -196,31 +197,112 @@ export const hsvaToHex = (h: number, sat: number, v: number, a: number) => {
   return `#${to(r + m)}${to(g + m)}${to(b + m)}${to(a)}`;
 };
 
-export function ColorEditor({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
-  const hsva = hexToHsva(value);
-  const [hexDraft, setHexDraft] = useState<string | null>(null);
+const WHEEL = 168;
+
+/** Hue/saturation wheel. Brightness is shown by darkening it. */
+function HueWheel({ h, s, v, onChange }: { h: number; s: number; v: number; onChange: (h: number, s: number) => void }) {
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  const pick = (x: number, y: number) => {
+    const dx = x - WHEEL / 2;
+    const dy = y - WHEEL / 2;
+    const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+    cb.current(hue, Math.min(1, Math.hypot(dx, dy) / (WHEEL / 2)));
+  };
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => pick(e.nativeEvent.locationX, e.nativeEvent.locationY),
+      onPanResponderMove: (e) => pick(e.nativeEvent.locationX, e.nativeEvent.locationY),
+    }),
+  ).current;
+  const r = WHEEL / 2;
+  const mx = r + Math.cos((h * Math.PI) / 180) * s * r;
+  const my = r + Math.sin((h * Math.PI) / 180) * s * r;
   return (
-    <View style={{ marginTop: 6 }}>
+    <View style={{ width: WHEEL, height: WHEEL }} {...responder.panHandlers}>
+      <Canvas style={{ width: WHEEL, height: WHEEL }} pointerEvents="none">
+        <Circle cx={r} cy={r} r={r}>
+          <SweepGradient c={vec(r, r)} colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']} />
+        </Circle>
+        <Circle cx={r} cy={r} r={r}>
+          <RadialGradient c={vec(r, r)} r={r} colors={['#ffffffff', '#ffffff00']} />
+        </Circle>
+        <Circle cx={r} cy={r} r={r} color={`rgba(0,0,0,${1 - v})`} />
+        <Circle cx={mx} cy={my} r={9} color="#ffffff" style="stroke" strokeWidth={3} />
+      </Canvas>
+    </View>
+  );
+}
+
+/** Vertical bar picking brightness, drawn from the current hue to black. */
+function ValueBar({ h, s, v, onChange }: { h: number; s: number; v: number; onChange: (v: number) => void }) {
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  const pick = (y: number) => cb.current(Math.max(0, Math.min(1, 1 - y / WHEEL)));
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => pick(e.nativeEvent.locationY),
+      onPanResponderMove: (e) => pick(e.nativeEvent.locationY),
+    }),
+  ).current;
+  const top = hsvaToHex(h, s, 1, 1);
+  return (
+    <View style={{ width: 28, height: WHEEL, marginLeft: 18 }} {...responder.panHandlers}>
+      <Canvas style={{ width: 28, height: WHEEL }} pointerEvents="none">
+        <RoundedRect x={4} y={0} width={20} height={WHEEL} r={10}>
+          <LinearGradient start={vec(0, 0)} end={vec(0, WHEEL)} colors={[top, '#000000']} />
+        </RoundedRect>
+        <RoundedRect x={0} y={(1 - v) * (WHEEL - 12)} width={28} height={12} r={6} color="#ffffff" />
+      </Canvas>
+    </View>
+  );
+}
+
+export function ColorEditor({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  // Keep hue/saturation locally so they survive passing through black or gray.
+  const [hsva, setHsva] = useState(() => hexToHsva(value));
+  const lastOut = useRef(value);
+  if (value !== lastOut.current) {
+    lastOut.current = value;
+    const next = hexToHsva(value);
+    if (hsvaToHex(hsva.h, hsva.s, hsva.v, hsva.a) !== value.toLowerCase()) setHsva(next);
+  }
+  const [hexDraft, setHexDraft] = useState<string | null>(null);
+  const emit = (h: number, sat: number, v: number, a: number) => {
+    setHsva({ h, s: sat, v, a });
+    const hex = hsvaToHex(h, sat, v, a);
+    lastOut.current = hex;
+    onChange(hex);
+  };
+  return (
+    <View style={{ marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+        <HueWheel h={hsva.h} s={hsva.s} v={hsva.v} onChange={(h, sat) => emit(h, sat, hsva.v || 1, hsva.a)} />
+        <ValueBar h={hsva.h} s={hsva.s} v={hsva.v} onChange={(v) => emit(hsva.h, hsva.s, v, hsva.a)} />
+      </View>
+      <View style={st.colorSlider}>
+        <Text style={st.colorLabel}>Opacity</Text>
+        <Slider value={hsva.a * 100} min={0} max={100} onChange={(x) => emit(hsva.h, hsva.s, hsva.v, x / 100)} />
+      </View>
       <View style={st.swatchGrid}>
         {SWATCHES.map((c) => (
-          <Pressable key={c} onPress={() => onChange(c + Math.round(hsva.a * 255).toString(16).padStart(2, '0'))}>
+          <Pressable
+            key={c}
+            onPress={() => {
+              const sw = hexToHsva(c);
+              emit(sw.s === 0 ? hsva.h : sw.h, sw.s, sw.v, hsva.a);
+            }}
+          >
             <View style={[st.swatch, { backgroundColor: c }]} />
           </Pressable>
         ))}
       </View>
-      {(
-        [
-          ['Hue', hsva.h, 0, 360, (x: number) => hsvaToHex(x, hsva.s, hsva.v, hsva.a)],
-          ['Sat', hsva.s * 100, 0, 100, (x: number) => hsvaToHex(hsva.h, x / 100, hsva.v, hsva.a)],
-          ['Bright', hsva.v * 100, 0, 100, (x: number) => hsvaToHex(hsva.h, hsva.s, x / 100, hsva.a)],
-          ['Alpha', hsva.a * 100, 0, 100, (x: number) => hsvaToHex(hsva.h, hsva.s, hsva.v, x / 100)],
-        ] as const
-      ).map(([label, v, lo, hi, make]) => (
-        <View key={label} style={st.colorSlider}>
-          <Text style={st.colorLabel}>{label}</Text>
-          <Slider value={v} min={lo} max={hi} onChange={(x) => onChange(make(x))} />
-        </View>
-      ))}
       <TextInput
         style={st.hex}
         value={hexDraft ?? value}
@@ -228,7 +310,9 @@ export function ColorEditor({ value, onChange }: { value: string; onChange: (hex
         onChangeText={setHexDraft}
         onEndEditing={() => {
           if (hexDraft && /^#?[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(hexDraft)) {
-            onChange((hexDraft.startsWith('#') ? hexDraft : '#' + hexDraft).toLowerCase());
+            const hex = (hexDraft.startsWith('#') ? hexDraft : '#' + hexDraft).toLowerCase();
+            const n = hexToHsva(hex);
+            emit(n.h, n.s, n.v, n.a);
           }
           setHexDraft(null);
         }}
@@ -274,7 +358,7 @@ const st = StyleSheet.create({
   oscLabel: { color: C.dim, fontSize: 12, marginTop: 4 },
   nav: { color: C.key, fontSize: 22, paddingHorizontal: 8, lineHeight: 22 },
   swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 },
-  swatch: { width: 30, height: 30, borderRadius: 15, margin: 4, borderWidth: 1, borderColor: C.line },
+  swatch: { width: 26, height: 26, borderRadius: 13, margin: 4, borderWidth: 1, borderColor: C.line },
   colorSlider: { flexDirection: 'row', alignItems: 'center' },
   colorLabel: { color: C.dim, width: 52, fontSize: 12 },
   colorPreview: { width: 34, height: 22, borderRadius: 6, borderWidth: 1, borderColor: C.line },

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Project } from './types';
+import type { Layer, Project } from './types';
 import { migrateProject } from './factory';
 
 const INDEX_KEY = 'projects:index';
@@ -30,4 +30,32 @@ export async function deleteProject(id: string) {
   const ids: string[] = raw ? JSON.parse(raw) : [];
   await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(ids.filter((x) => x !== id)));
   await AsyncStorage.removeItem(projectKey(id));
+}
+
+// ---------------------------------------------------------------- elements
+
+/** A layer saved for reuse across projects. */
+export interface SavedElement {
+  id: string;
+  name: string;
+  layer: Layer;
+  createdAt: number;
+}
+
+const ELEMENTS_KEY = 'elements';
+
+export async function listElements(): Promise<SavedElement[]> {
+  const raw = await AsyncStorage.getItem(ELEMENTS_KEY);
+  const items: SavedElement[] = raw ? JSON.parse(raw) : [];
+  return items.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function saveElement(el: SavedElement) {
+  const items = await listElements();
+  await AsyncStorage.setItem(ELEMENTS_KEY, JSON.stringify([el, ...items.filter((x) => x.id !== el.id)]));
+}
+
+export async function deleteElement(id: string) {
+  const items = await listElements();
+  await AsyncStorage.setItem(ELEMENTS_KEY, JSON.stringify(items.filter((x) => x.id !== id)));
 }

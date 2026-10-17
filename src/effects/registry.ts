@@ -30,7 +30,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'spinBlur',
-    name: 'Spin Blur',
+    name: 'Lens Blur',
     category: 'Blur',
     impl: 'shader',
     params: [...center, num('amount', 'Angle', 0, 90, 10)],
@@ -59,7 +59,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'lensBlur',
-    name: 'Lens Blur (Bokeh)',
+    name: 'Bokeh Blur',
     category: 'Blur',
     impl: 'shader',
     params: [num('radius', 'Radius', 0, 80, 10), num('bright', 'Highlight Boost', 0, 300, 100)],
@@ -142,7 +142,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'temperature',
-    name: 'Temperature / Tint',
+    name: 'Color Temperature',
     category: 'Color',
     impl: 'shader',
     params: [num('temp', 'Temperature', -100, 100, 20), num('tintgm', 'Tint', -100, 100, 0)],
@@ -298,7 +298,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'bulge',
-    name: 'Bulge / Pinch',
+    name: 'Pinch/Bulge',
     category: 'Distort',
     impl: 'shader',
     params: [...center, num('radius', 'Radius', 10, 3000, 400), num('strength', 'Strength', -100, 100, 50)],
@@ -340,7 +340,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'ripple',
-    name: 'Ripple',
+    name: 'Circular Ripple',
     category: 'Distort',
     impl: 'shader',
     params: [...center, num('amp', 'Amplitude', 0, 200, 20), num('wl', 'Wavelength', 10, 1000, 120), num('speed', 'Speed', -10, 10, 1, 0.1), num('decay', 'Falloff', 0, 100, 30)],
@@ -367,7 +367,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'shake',
-    name: 'Camera Shake',
+    name: 'Auto-Shake',
     category: 'Distort',
     impl: 'shader',
     params: [num('amount', 'Amount (px)', 0, 300, 25), num('freq', 'Frequency', 0.5, 30, 8, 0.5), num('rotation', 'Rotation', 0, 30, 2), num('seed', 'Seed', 0, 100, 1, 1)],
@@ -505,7 +505,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'edgeDetect',
-    name: 'Edge Detect',
+    name: 'Find Edges',
     category: 'Stylize',
     impl: 'shader',
     params: [num('strength', 'Strength', 0, 500, 150), choice('mode', 'Style', ['Neon (dark)', 'Sketch (light)']), num('blend', 'Blend Original', 0, 100, 0)],
@@ -541,7 +541,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'halftone',
-    name: 'Halftone',
+    name: 'Halftone Dots',
     category: 'Stylize',
     impl: 'shader',
     params: [num('size', 'Dot Size', 3, 100, 14), num('angle', 'Angle', -90, 90, 45), choice('mode', 'Ink', ['Original Colors', 'Black on White'])],
@@ -591,7 +591,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'grain',
-    name: 'Film Grain / Noise',
+    name: 'Noise',
     category: 'Stylize',
     impl: 'shader',
     params: [num('amount', 'Amount', 0, 100, 25), num('size', 'Grain Size', 1, 12, 1.5, 0.5), num('fps', 'Animate (fps)', 0, 60, 24, 1), choice('mono', 'Type', ['Mono', 'Color'])],
@@ -878,7 +878,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'radialWipe',
-    name: 'Clock Wipe',
+    name: 'Radial Wipe',
     category: 'Reveal',
     impl: 'shader',
     params: [...center, num('done', 'Completion %', 0, 100, 25), num('start', 'Start Angle', -180, 180, -90), num('feather', 'Feather (deg)', 0, 90, 2)],

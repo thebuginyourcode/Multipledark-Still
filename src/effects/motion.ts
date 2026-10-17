@@ -151,7 +151,7 @@ export const MOTION_EFFECTS: EffectDef[] = [
   },
   {
     type: 'pulse',
-    name: 'Pulse',
+    name: 'Pulse Size',
     category: 'Motion',
     impl: 'motion',
     params: [num('amount', 'Scale %', 0, 200, 15), num('freq', 'Frequency', 0.1, 20, 1.5, 0.1)],
@@ -229,14 +229,14 @@ export const MOTION_EFFECTS: EffectDef[] = [
   // ---------------------------------------------------------------- Time & Repeat
   {
     type: 'echo',
-    name: 'Echo (Trails)',
+    name: 'Echo Keyframes',
     category: 'Time & Repeat',
     impl: 'echo',
     params: [num('count', 'Echoes', 1, 12, 4, 1), num('delay', 'Delay (s)', 0.01, 1, 0.08, 0.01), num('decay', 'Opacity Decay %', 0, 100, 40)],
   },
   {
     type: 'repeater',
-    name: 'Repeater (Clone)',
+    name: 'Repeat',
     category: 'Time & Repeat',
     impl: 'repeater',
     params: [
@@ -251,7 +251,7 @@ export const MOTION_EFFECTS: EffectDef[] = [
   },
   {
     type: 'posterizeTime',
-    name: 'Posterize Time',
+    name: 'Time Quantization',
     category: 'Time & Repeat',
     impl: 'posterizeTime',
     params: [num('fps', 'Frame Rate', 1, 30, 8, 1)],

@@ -577,10 +577,10 @@ half4 main(float2 xy) {
   // ---------------------------------------------------------------- Generate
   {
     type: 'fractalNoise',
-    name: 'Fractal Noise',
+    name: 'Clouds',
     category: 'Generate',
     impl: 'shader',
-    params: [num('scale', 'Scale', 10, 2000, 250), num('contrast', 'Contrast', 10, 400, 150), num('speed', 'Evolution', 0, 5, 0.3, 0.05), color('c1', 'Dark', '#000000ff'), color('c2', 'Light', '#ffffffff'), num('opacity', 'Opacity', 0, 100, 100), genMode(3)],
+    params: [num('scale', 'Scale', 10, 2000, 250), num('contrast', 'Contrast', 10, 400, 150), num('speed', 'Evolution', 0, 5, 0.3, 0.05), color('c1', 'Dark', '#000000ff'), color('c2', 'Light', '#ffffffff'), num('opacity', 'Opacity', 0, 100, 100), genMode(2)],
     sksl: `
 half4 main(float2 xy) {
   float n = fbm(xy / p_scale + float2(time * p_speed, time * p_speed * 0.7));
@@ -592,7 +592,7 @@ half4 main(float2 xy) {
   },
   {
     type: 'checkerboard',
-    name: 'Checkerboard',
+    name: 'Checker',
     category: 'Generate',
     impl: 'shader',
     params: [num('size', 'Size', 4, 400, 60), color('c1', 'Color 1', '#ffffffff'), color('c2', 'Color 2', '#000000ff'), num('speed', 'Scroll Speed', -500, 500, 0), num('opacity', 'Opacity', 0, 100, 100), genMode(0)],

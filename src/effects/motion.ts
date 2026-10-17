@@ -20,7 +20,8 @@ export const identityDelta = (): MotionDelta => ({ x: 0, y: 0, z: 0, rot: 0, rx:
 type Param = (key: string) => number;
 type MotionFn = (p: Param, t: number, dur: number, d: MotionDelta) => void;
 
-const TARGETS = ['Position X', 'Position Y', 'Rotation', 'Scale', 'Opacity', 'Rotation X (3D)', 'Rotation Y (3D)', 'Depth Z (3D)'];
+// Appended options keep their index so saved projects keep their target.
+const TARGETS = ['Position X', 'Position Y', 'Rotation', 'Scale', 'Opacity', 'Rotation X (3D)', 'Rotation Y (3D)', 'Depth Z (3D)', 'Along Angle'];
 
 export const MOTION_FNS: Record<string, MotionFn> = {
   oscillate: (p, t, _dur, d) => {
@@ -34,6 +35,12 @@ export const MOTION_FNS: Record<string, MotionFn> = {
       case 5: d.rx += v; break;
       case 6: d.ry += v; break;
       case 7: d.z += v; break;
+      case 8: {
+        const a = (p('angle') * Math.PI) / 180;
+        d.x += Math.cos(a) * v;
+        d.y += Math.sin(a) * v;
+        break;
+      }
     }
   },
   wiggle: (p, t, _dur, d) => {
@@ -143,9 +150,10 @@ export const MOTION_EFFECTS: EffectDef[] = [
     category: 'Motion',
     impl: 'motion',
     params: [
-      choice('target', 'Property', TARGETS, 1),
+      choice('target', 'Property', TARGETS, 8),
+      num('angle', 'Angle ° (Along Angle)', -180, 180, 0),
       choice('wave', 'Waveform', WAVES.map((w) => WAVE_LABELS[w])),
-      num('amp', 'Amplitude', 0, 1000, 60),
+      num('amp', 'Magnitude', 0, 1000, 60),
       num('freq', 'Frequency (Hz)', 0, 20, 1, 0.05),
       num('phase', 'Phase °', 0, 360, 0),
     ],
@@ -180,7 +188,7 @@ export const MOTION_EFFECTS: EffectDef[] = [
   },
   {
     type: 'swing',
-    name: 'Swing (Pendulum)',
+    name: 'Swing',
     category: 'Motion',
     impl: 'motion',
     params: [num('angle', 'Angle °', 0, 180, 25), num('freq', 'Frequency', 0.05, 10, 0.8, 0.05), num('damping', 'Damping', 0, 100, 0)],
